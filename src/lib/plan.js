@@ -69,7 +69,9 @@ export function simulateMinimumsOnly(cards) {
   let totalInterest = 0
   let months = 0
   for (const c of cards) {
-    // El mínimo suele bajar con el saldo; aproximación: pago = máx(2% del saldo, $200)
+    // Mínimo realista: intereses del periodo + 1.5% del saldo (mínimo $100).
+    // Así el saldo sí baja mes a mes; pagar solo el mínimo tarda mucho
+    // pero termina, a diferencia de un mínimo fijo menor que el interés.
     let saldo = c.balance
     let m = 0
     let interest = 0
@@ -78,7 +80,7 @@ export function simulateMinimumsOnly(cards) {
       const i = saldo * r
       interest += i
       saldo += i
-      const p = Math.min(Math.max(saldo * 0.02, 200), saldo)
+      const p = Math.min(i + Math.max(saldo * 0.015, 100), saldo)
       saldo -= p
       m++
     }
