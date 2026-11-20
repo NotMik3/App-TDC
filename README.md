@@ -45,3 +45,4 @@ Está publicada en Vercel desde este repositorio (proyecto de Vite, `npm run bui
 - **v2.2** — Barra lateral con bienvenida por nombre, nueva pestaña Dashboard, Resumen renombrado a TDC (Crédito) y pestaña Estados eliminada (su historial con Corregir/Eliminar/Ver archivo ahora vive dentro de cada tarjeta en TDC (Crédito)).
 - **v2.3** — Respaldo: descargar y restaurar todos tus datos en un archivo .json, con aviso en el Dashboard.
 - **v2.4** — Calendario, avisos de vencimiento, simulador de pago extra, modo privado e instalación como app (PWA).
+- **v2.4.1** — Ajustes para celular: barra de pestañas abajo, tablas y gráficas con scroll horizontal, campos y colores que respetan el modo oscuro, fondo con foto sin bloqueo en móvil.

@@ -1008,7 +1008,7 @@ export default function App() {
                       {list.length > 0 && (
                         <div style={{ marginTop: 12 }}>
                           <h4>Historial</h4>
-                          <table><thead><tr><th>Mes</th><th>Saldo final</th><th>Entró</th><th>Salió</th><th>Archivo</th><th></th></tr></thead>
+                          <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Mes</th><th>Saldo final</th><th>Entró</th><th>Salió</th><th>Archivo</th><th></th></tr></thead>
                           <tbody>
                             {list.map((s) => (
                               <tr key={s.id}>
@@ -1017,7 +1017,7 @@ export default function App() {
                                 <td><button className="ghost" onClick={() => setDebitEditing({ ...s, categories: s.categories || [], bank: a.bank, name: a.name, last4: a.last4, detected: true })}>Corregir</button>{' '}<button className="danger" onClick={() => deleteDebitStatement(s.id)}>Eliminar</button></td>
                               </tr>
                             ))}
-                          </tbody></table>
+                          </tbody></table></div>
                         </div>
                       )}
                     </div>
@@ -1098,7 +1098,7 @@ export default function App() {
           </section>
         )}
       </main>
-      <footer>App TDC v2.4 · Tus datos se guardan solo en tu navegador (localStorage). No se suben a ningún servidor. El plan es una simulación educativa, no asesoría financiera.</footer>
+      <footer>App TDC v2.4.1 · Tus datos se guardan solo en tu navegador (localStorage). No se suben a ningún servidor. El plan es una simulación educativa, no asesoría financiera.</footer>
       </div>
       </div>
     </div>
