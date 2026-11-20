@@ -15,6 +15,9 @@ App web para analizar estados de cuenta de tarjetas de crédito mes a mes y arma
 - **Pagos**: registra lo que realmente pagaste contra la meta del plan.
 - **Carga rápida (v3)**: arrastra uno o varios PDF en el Dashboard o en TDC (Crédito) → pantalla de confirmación con el resumen (corte, límite, pago sin intereses, mínimo, saldo, límite de crédito) → «Confirmar y actualizar». Lee también movimientos y compras a MSI (parcialidad `04/12`), evita duplicados (mismo mes = reemplaza; mismo movimiento = se omite; mismo archivo = aviso) y permite corregir todo en tablas editables.
 - **Dashboard (v3)**: termómetro de utilización (verde < 30 %, amarillo 30-50 %, rojo > 50 %) total y por tarjeta, línea de tiempo del ciclo (corte → gracia → límite) con cuenta regresiva, «Mejor día para comprar» y alertas a 5 días, 2 días y el mismo día.
+- **MSI y suscripciones (v3.1)**: lista de compras a meses sin intereses con barra «Pago 4 de 12», mensualidad, saldo por liquidar y crédito que se libera; gráfica de lo ya comprometido a 6 o 12 meses; suscripciones detectadas (cargos recurrentes) con costo mensual y anual, que puedes confirmar o descartar.
+- **Simuladores (v3.1)**: pago mínimo vs. no generar intereses, a cuál tarjeta abonarle el extra (avalancha vs. bola de nieve) y qué pasa si adelantas un MSI.
+- **Análisis (v3.1)**: gasto por categoría, comercios principales, compras en otras divisas con su equivalente en MXN y tope de presupuesto mensual (también se ve en el Dashboard).
 - **Calendario**: vista mensual con tus fechas de corte, fechas límite y pagos registrados (las fechas se repiten cada mes según tu último estado).
 - **Avisos de vencimiento**: banner rojo en Dashboard y TDC (Crédito) y globo con número en la barra lateral cuando una tarjeta vence en 5 días o menos.
 - **Simulador "¿y si pago más?"**: en Plan para liquidar, compara tu plan actual contra pagar un extra al mes (meses que te ahorras e intereses que dejas de pagar).
@@ -49,3 +52,4 @@ Está publicada en Vercel desde este repositorio (proyecto de Vite, `npm run bui
 - **v2.4** — Calendario, avisos de vencimiento, simulador de pago extra, modo privado e instalación como app (PWA).
 - **v2.4.1** — Ajustes para celular: barra de pestañas abajo, tablas y gráficas con scroll horizontal, campos y colores que respetan el modo oscuro, fondo con foto sin bloqueo en móvil.
 - **v3.0** — Carga rápida con confirmación en un clic, lectura de movimientos y MSI, detección de duplicados, Dashboard con termómetro y línea de tiempo del ciclo. Modelo de datos y arquitectura en `docs/ARQUITECTURA.md`.
+- **v3.1** — MSI y suscripciones, simuladores, análisis y presupuesto, tipo de cambio y panel para ver el texto leído del PDF.

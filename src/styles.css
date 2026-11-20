@@ -109,3 +109,43 @@ details > summary { list-style: revert; }
   footer { padding-bottom: 24px; }
   .cal .cell { min-height: 46px; padding: 2px; }
 }
+
+/* ---------- v3: confirmación rápida, ciclo y termómetro ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.tile { border: 1px solid rgba(128,128,128,.3); border-radius: var(--radius); padding: 10px; }
+.tile span { display: block; font-size: .8em; opacity: .7; }
+.tile b { font-size: 1.1em; }
+.tile.missing { border-color: #dc2626; }
+.tile.missing b { color: #dc2626; }
+.quick table input, .quick table select { min-width: 90px; }
+.alert.lvl-cinco { background: #fef9c3; border-color: #ca8a04; color: #713f12; }
+.alert.lvl-dos { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
+.alert.lvl-hoy { background: #fee2e2; border-color: #dc2626; color: #7f1d1d; }
+.gauge { margin: 0; text-align: center; color: var(--text); }
+.gauge svg { width: 100%; height: auto; display: block; }
+.gauge figcaption { display: flex; flex-direction: column; gap: 2px; font-size: .9em; }
+.gauge-grid { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; align-items: flex-end; }
+.cycle { margin-top: 10px; }
+.cycle-labels { display: flex; justify-content: space-between; gap: 6px; font-size: .78em; opacity: .85; }
+.cycle-labels span:nth-child(2) { text-align: center; opacity: .7; }
+.cycle-bar { position: relative; height: 12px; border-radius: 999px; background: rgba(128,128,128,.25); margin: 6px 0; }
+.cycle-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.cycle-bar i.cinco { background: #ca8a04; } .cycle-bar i.dos { background: #ea580c; } .cycle-bar i.hoy { background: #dc2626; } .cycle-bar i.compras { background: #64748b; }
+.cycle-bar b { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--text); border: 3px solid var(--card); transform: translate(-50%, -50%); }
+.cycle-status { margin: 4px 0 0; font-weight: 600; }
+.cycle-status.cinco { color: #ca8a04; } .cycle-status.dos { color: #ea580c; } .cycle-status.hoy { color: #dc2626; }
+.badge-good { background: #16a34a; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: .85em; font-weight: 600; }
+.badge-wait { background: rgba(128,128,128,.25); border-radius: 999px; padding: 2px 10px; font-size: .85em; }
+
+/* ---------- v3.1: MSI, barras apiladas, simuladores ---------- */
+.msi-item { border-top: 1px solid rgba(128,128,128,.25); padding: 12px 0; }
+.msi-item .meter { margin: 8px 0; }
+.msi-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .9em; margin-bottom: 6px; }
+.sbars { display: flex; align-items: flex-end; gap: 6px; height: 170px; overflow-x: auto; padding-top: 8px; }
+.sbar { flex: 1 0 44px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; text-align: center; font-size: .68em; }
+.sbar-col { width: 70%; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; min-height: 2px; }
+.sbar span { margin-top: 4px; white-space: nowrap; }
+.legend { display: flex; gap: 14px; margin-top: 8px; font-size: .85em; }
+.legend b { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+.card.stat.best { border-color: #16a34a; }
+textarea { width: 100%; font-family: ui-monospace, monospace; font-size: .8em; background: var(--card); color: var(--text); border: 1px solid rgba(128,128,128,.45); border-radius: 8px; padding: 8px; }

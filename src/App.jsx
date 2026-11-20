@@ -1,11 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { extractPdfText, parseStatementText, parseDebitStatementText, monthKeyFromDate } from './lib/parse.js'
 import { simulateCard, simulateTogether, simulateMinimumsOnly, recommendedJoint, fmtMoney, fmtMonth, setPrivacy } from './lib/plan.js'
+import { extractPdf } from './lib/pdfLines.js'
+import { parseMovements } from './lib/movements.js'
+import { hashFile } from './lib/fileHash.js'
+import { applyStatement } from './lib/ledger.js'
+import { FIELD_LABELS, MONEY_FIELDS } from './lib/fields.js'
+import Dashboard from './components/Dashboard.jsx'
+import QuickConfirm from './components/QuickConfirm.jsx'
+import MsiPanel from './components/MsiPanel.jsx'
+import Analytics from './components/Analytics.jsx'
+import Simulators from './components/Simulators.jsx'
 import { THEMES, DEFAULT_APPEARANCE, resolveAppearance, RADIUS, FONT_SIZE } from './lib/themes.js'
 
 const LS_KEY = 'app-tdc-v1'
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
-const emptyData = () => ({ cards: [], statements: [], payments: [], debitAccounts: [], debitStatements: [], profile: { name: '' }, plan: { mode: 'juntas', strategy: 'avalanche', monthlyBudget: 0, perCard: {} }, appearance: { ...DEFAULT_APPEARANCE } })
+const emptyData = () => ({ cards: [], statements: [], payments: [], debitAccounts: [], debitStatements: [], movements: [], msi: [], subOverrides: {}, schema: 3, profile: { name: '' }, plan: { mode: 'juntas', strategy: 'avalanche', monthlyBudget: 0, perCard: {} }, appearance: { ...DEFAULT_APPEARANCE } })
 
 function useStored() {
   const [data, setData] = useState(() => {
@@ -18,13 +28,23 @@ function useStored() {
         ...d, ...p,
         cards: p.cards || [], statements: p.statements || [], payments: p.payments || [],
         debitAccounts: p.debitAccounts || [], debitStatements: p.debitStatements || [],
+        movements: p.movements || [], msi: p.msi || [], subOverrides: p.subOverrides || {},
         profile: { ...d.profile, ...(p.profile || {}) },
         plan: { ...d.plan, ...(p.plan || {}) },
         appearance: { ...d.appearance, ...(p.appearance || {}) },
       }
     } catch { return emptyData() }
   })
-  useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(data)) } catch {} }, [data])
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(data)) }
+    catch {
+      try {
+        const slim = { ...data, statements: data.statements.map((x) => ({ ...x, fileDataUrl: null })), debitStatements: data.debitStatements.map((x) => ({ ...x, fileDataUrl: null })) }
+        localStorage.setItem(LS_KEY, JSON.stringify(slim))
+        window.dispatchEvent(new Event('tdc-storage-full'))
+      } catch {}
+    }
+  }, [data])
   return [data, setData]
 }
 
@@ -34,13 +54,6 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file) })
 }
 
-const FIELD_LABELS = [
-  ['bank', 'Banco'], ['product', 'Producto'], ['last4', 'Últimos 4 dígitos'], ['limit', 'Límite de crédito'],
-  ['rate', 'Tasa anual (%)'], ['cat', 'CAT (%)'], ['balance', 'Saldo'], ['minimum', 'Pago mínimo'],
-  ['noInterestPayment', 'Pago para no generar intereses'], ['interest', 'Intereses'], ['commissions', 'Comisiones'],
-  ['cutoffDate', 'Fecha de corte'], ['dueDate', 'Fecha límite de pago'],
-]
-const MONEY_FIELDS = new Set(['limit', 'balance', 'minimum', 'noInterestPayment', 'interest', 'commissions'])
 
 const DEBIT_FIELD_LABELS = [
   ['bank', 'Banco'], ['name', 'Cuenta (ej. Nómina, Ahorro)'], ['last4', 'Últimos 4 dígitos'],
@@ -152,8 +165,11 @@ const TABS = [
   ['dashboard', '🏠', 'Dashboard'],
   ['credito', '💳', 'TDC (Crédito)'],
   ['debito', '🏦', 'TDD (Débito)'],
+  ['msi', '🗓️', 'MSI y suscripciones'],
+  ['analisis', '📊', 'Análisis'],
   ['calendario', '📅', 'Calendario'],
   ['plan', '🎯', 'Plan para liquidar'],
+  ['simuladores', '🧮', 'Simuladores'],
   ['pagos', '💵', 'Pagos'],
   ['personalizar', '🎨', 'Personalizar'],
 ]
@@ -171,6 +187,12 @@ export default function App() {
   const [debitChartView, setDebitChartView] = useState('saldo') // saldo | flujo | ahorro
   const [calMonth, setCalMonth] = useState(new Date().toISOString().slice(0, 7))
   const [extra, setExtra] = useState('')
+  const [queue, setQueue] = useState([])
+  useEffect(() => {
+    const h = () => setNotice('El almacenamiento del navegador se llenó: guardé tus números pero no los PDF adjuntos. Descarga un respaldo en Personalizar.')
+    window.addEventListener('tdc-storage-full', h)
+    return () => window.removeEventListener('tdc-storage-full', h)
+  }, [])
   const appearance = resolveAppearance(data.appearance)
   const hideAmounts = !!data.profile?.hideAmounts
   setPrivacy(hideAmounts)
@@ -234,33 +256,58 @@ export default function App() {
   async function handleFiles(fileList) {
     const files = Array.from(fileList || [])
     if (!files.length) return
-    for (const file of files) {
-      setBusy(`Leyendo ${file.name}…`)
-      try {
-        let parsed = { bank: null, product: null, last4: null, limit: null, rate: null, cat: null, balance: null, minimum: null, noInterestPayment: null, interest: null, commissions: null, cutoffDate: null, dueDate: null }
-        let detected = false
-        let dataUrl = null
-        try { dataUrl = await fileToDataUrl(file) } catch {}
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          try {
-            const text = await extractPdfText(file)
-            parsed = parseStatementText(text)
-            detected = Object.values(parsed).some((v) => v !== null && v !== '')
-          } catch (e) { detected = false }
-        }
-        setPending({
-          id: null, fileName: file.name, fileType: file.type, fileDataUrl: dataUrl,
-          ...parsed, detected,
-          monthKey: monthKeyFromDate(parsed.cutoffDate),
-        })
-        setTab('credito')
-        setNotice(detected ? `Detecté datos de ${file.name}. Revísalos y guarda.` : `${file.name}: no se pudo leer automáticamente. Llena los datos a mano.`)
-        return // uno por uno: el usuario confirma cada estado antes del siguiente
-      } finally { setBusy('') }
+    const drafts = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setBusy(`Leyendo ${file.name} (${i + 1} de ${files.length})…`)
+      let parsed = { bank: null, product: null, last4: null, limit: null, rate: null, cat: null, balance: null, minimum: null, noInterestPayment: null, interest: null, commissions: null, cutoffDate: null, dueDate: null }
+      let movements = []
+      let msi = []
+      let fxRate = null
+      let rawLines = []
+      let unparsed = []
+      let detected = false
+      let dataUrl = null
+      try { dataUrl = await fileToDataUrl(file) } catch {}
+      const fileHash = await hashFile(file)
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          const { text, lines } = await extractPdf(file)
+          parsed = parseStatementText(text)
+          const mv = parseMovements(lines, parsed)
+          movements = mv.movements; msi = mv.msi; fxRate = mv.fxRate; unparsed = mv.unparsed; rawLines = lines
+          detected = Object.values(parsed).some((v) => v !== null && v !== '')
+        } catch (e) { detected = false }
+      }
+      drafts.push({
+        id: null, draftKey: uid(), fileName: file.name, fileType: file.type, fileDataUrl: dataUrl, fileHash,
+        ...parsed, detected, monthKey: monthKeyFromDate(parsed.cutoffDate), movements, msi, fxRate, rawLines, unparsed,
+      })
     }
+    setBusy('')
+    if (pending) setQueue((q) => [...q, ...drafts])
+    else { setPending(drafts[0]); setQueue(drafts.slice(1)) }
+    if (tab !== 'dashboard') setTab('credito')
+    setNotice(drafts.length === 1 ? `Leí ${drafts[0].fileName}. Revisa el resumen y confirma.` : `Leí ${drafts.length} archivos. Los confirmas uno por uno, en un clic cada uno.`)
+  }
+
+  function advanceQueue() {
+    if (queue.length) { setPending(queue[0]); setQueue(queue.slice(1)) } else setPending(null)
   }
 
   function saveStatement(f) {
+    if (f.id) return saveEditedStatement(f)
+    const { data: next, summary } = applyStatement(data, f, uid)
+    setData(next)
+    advanceQueue()
+    const parts = [`${summary.added} movimiento${summary.added === 1 ? '' : 's'} nuevo${summary.added === 1 ? '' : 's'}`]
+    if (summary.skipped) parts.push(`${summary.skipped} duplicado${summary.skipped === 1 ? '' : 's'} omitido${summary.skipped === 1 ? '' : 's'}`)
+    if (summary.msiNew || summary.msiUpdated) parts.push(`MSI: ${summary.msiNew} nuevo${summary.msiNew === 1 ? '' : 's'}, ${summary.msiUpdated} actualizado${summary.msiUpdated === 1 ? '' : 's'}`)
+    setNotice(`Listo: ${summary.replaced ? 'reemplacé el estado de ese mes' : summary.cardCreated ? 'creé la tarjeta' : 'actualicé tu tarjeta'}. ${parts.join(' · ')}.`)
+    if (!queue.length) setTab('dashboard')
+  }
+
+  function saveEditedStatement(f) {
     const balance = numOrNull(f.balance)
     const last4 = String(f.last4 || '').replace(/\D/g, '').slice(-4)
     let cardId = null
@@ -282,7 +329,7 @@ export default function App() {
       balance, minimum: numOrNull(f.minimum), noInterestPayment: numOrNull(f.noInterestPayment),
       interest: numOrNull(f.interest), commissions: numOrNull(f.commissions),
       cutoffDate: f.cutoffDate || '', dueDate: f.dueDate || '',
-      fileName: f.fileName || '', fileType: f.fileType || '', fileDataUrl: f.fileDataUrl || null,
+      fileHash: f.fileHash || '', fileName: f.fileName || '', fileType: f.fileType || '', fileDataUrl: f.fileDataUrl || null,
     }
     const statements = f.id ? data.statements.map((s) => s.id === f.id ? statement : s) : [...data.statements, statement]
     setData({ ...data, cards, statements })
@@ -291,10 +338,10 @@ export default function App() {
     setTab('credito')
   }
 
-  function deleteStatement(id) { if (confirm('¿Eliminar este estado de cuenta?')) setData({ ...data, statements: data.statements.filter((s) => s.id !== id) }) }
+  function deleteStatement(id) { if (confirm('¿Eliminar este estado de cuenta?')) setData({ ...data, statements: data.statements.filter((s) => s.id !== id), movements: (data.movements || []).filter((m) => m.statementId !== id) }) }
   function deleteCard(id) {
     if (!confirm('¿Eliminar esta tarjeta y sus estados?')) return
-    setData({ ...data, cards: data.cards.filter((c) => c.id !== id), statements: data.statements.filter((s) => s.cardId !== id), payments: data.payments.filter((p) => p.cardId !== id) })
+    setData({ ...data, cards: data.cards.filter((c) => c.id !== id), statements: data.statements.filter((s) => s.cardId !== id), movements: (data.movements || []).filter((m) => m.cardId !== id), msi: (data.msi || []).filter((m) => m.cardId !== id), payments: data.payments.filter((p) => p.cardId !== id) })
   }
 
   // ---------- Débito (TDD) ----------
@@ -478,6 +525,10 @@ export default function App() {
     }
   }
 
+  const confirmNode = pending && (
+    <QuickConfirm key={pending.draftKey || pending.fileName} draft={pending} data={data} left={queue.length} onConfirm={saveStatement} onCancel={advanceQueue} />
+  )
+
   const todayStr = new Date().toISOString().slice(0, 10)
   const upcoming = data.cards
     .map((c) => ({ c, s: latestByCard[c.id] }))
@@ -563,80 +614,12 @@ export default function App() {
         {busy && <p className="muted">{busy}</p>}
 
         {tab === 'dashboard' && (
-          <section>
-            <h2 className="page-title">Dashboard</h2>
-            {!hasAnything && (
-              <div className="card">
-                <p>Empieza vacía, sin saldos inventados. Sube tu primer estado de cuenta y aquí verás todas tus tarjetas juntas.</p>
-                <div className="row">
-                  <button className="primary" onClick={() => setTab('credito')}>Subir estado de crédito</button>
-                  <button className="ghost" onClick={() => setTab('debito')}>Subir estado de débito</button>
-                </div>
-              </div>
-            )}
-            {urgentBanner}
-            {hasAnything && backupStale && (
-              <div className="alert">💾 {lastBackup ? `Tu último respaldo fue el ${fmtBackup(lastBackup)}.` : 'Aún no has hecho un respaldo.'} Tus datos viven solo en este navegador. <button className="ghost" onClick={() => setTab('personalizar')}>Hacer respaldo</button></div>
-            )}
-            {hasAnything && (
-              <div className="grid">
-                <div className="card stat"><span>Deuda total (crédito)</span><b>{fmtMoney(totalDebt)}</b>{delta !== null && <span className={delta > 0 ? 'delta-up' : 'delta-down'}>{delta > 0 ? '▲' : '▼'} {fmtMoney(Math.abs(delta))} vs mes anterior</span>}</div>
-                <div className="card stat"><span>Dinero en débito</span><b>{fmtMoney(debitTotals.balance)}</b></div>
-                <div className="card stat"><span>Posición neta</span><b>{fmtMoney(debitTotals.balance - totalDebt)}</b><span>débito menos deuda de crédito</span></div>
-                <div className="card stat"><span>Intereses del mes</span><b>{fmtMoney(monthInterest)}</b></div>
-              </div>
-            )}
-            {upcoming.length > 0 && (
-              <div className="card">
-                <h3>Próximos pagos</h3>
-                {upcoming.map(({ c, s: st, days }) => (
-                  <div key={c.id} className="list-row">
-                    <span>{c.bank || 'Banco'} {c.product || ''} <span className="muted">····{c.last4 || '----'}</span></span>
-                    <span style={{ textAlign: 'right' }}>
-                      <b>{fmtMoney(st.noInterestPayment)}</b> <span className="muted">para no generar interés</span><br />
-                      <span className={days < 0 ? 'muted' : days <= 5 ? 'warn' : 'muted'}>{st.dueDate} · {days < 0 ? 'fecha límite pasada' : days === 0 ? 'vence hoy' : `en ${days} día${days === 1 ? '' : 's'}`}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {data.cards.length > 0 && (
-              <div className="card">
-                <h3>Tarjetas de crédito ({data.cards.length})</h3>
-                {data.cards.map((c) => {
-                  const l = latestByCard[c.id]
-                  const util = c.limit > 0 && l ? (l.balance || 0) / c.limit * 100 : 0
-                  return (
-                    <button key={c.id} className="mini-item" onClick={() => setTab('credito')}>
-                      <span className="card-title-row">
-                        <span><strong>{c.bank || 'Banco'} {c.product || ''}</strong> <span className="muted">····{c.last4 || '----'}</span></span>
-                        <b>{l ? fmtMoney(l.balance) : '—'}</b>
-                      </span>
-                      {l && <span className="muted" style={{ display: 'block' }}>Mínimo {fmtMoney(l.minimum)} · Sin intereses {fmtMoney(l.noInterestPayment)} · Límite {l.dueDate || '—'}</span>}
-                      {c.limit > 0 && l && <span className={`meter${util > 80 ? ' red' : util > 50 ? ' amber' : ''}`} style={{ display: 'block' }}><i style={{ width: `${Math.min(100, util)}%` }} /></span>}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            {data.debitAccounts.length > 0 && (
-              <div className="card">
-                <h3>Cuentas de débito ({data.debitAccounts.length})</h3>
-                {data.debitAccounts.map((a) => {
-                  const l = latestByAccount[a.id]
-                  return (
-                    <button key={a.id} className="mini-item" onClick={() => setTab('debito')}>
-                      <span className="card-title-row">
-                        <span><strong>{a.bank || 'Banco'} {a.name || ''}</strong> <span className="muted">····{a.last4 || '----'}</span></span>
-                        <b>{l ? fmtMoney(l.closingBalance) : '—'}</b>
-                      </span>
-                      {l && <span className="muted" style={{ display: 'block' }}>Entró {fmtMoney(l.totalIncome)} · Salió {fmtMoney(l.totalExpenses)}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </section>
+          <Dashboard
+            slot={<><div className="card"><UploadZone onFiles={handleFiles} big /></div>{confirmNode}</>}
+            data={data} latestByCard={latestByCard} latestByAccount={latestByAccount} debitTotals={debitTotals}
+            totalDebt={totalDebt} delta={delta} monthInterest={monthInterest} setTab={setTab}
+            backup={{ stale: backupStale, last: lastBackup, fmt: fmtBackup }}
+          />
         )}
 
         {tab === 'credito' && (
@@ -646,10 +629,10 @@ export default function App() {
             <div className="card">
               <UploadZone onFiles={handleFiles} big />
               <div className="row" style={{ marginTop: 10 }}>
-                <button className="ghost" onClick={() => setPending({ id: null, fileName: 'Captura manual', fileType: '', fileDataUrl: null, bank: '', product: '', last4: '', limit: '', rate: '', cat: '', balance: '', minimum: '', noInterestPayment: '', interest: '', commissions: '', cutoffDate: '', dueDate: '', detected: false, monthKey: new Date().toISOString().slice(0, 7) })}>+ Captura manual</button>
+                <button className="ghost" onClick={() => setPending({ id: null, draftKey: uid(), movements: [], msi: [], fileName: 'Captura manual', fileType: '', fileDataUrl: null, bank: '', product: '', last4: '', limit: '', rate: '', cat: '', balance: '', minimum: '', noInterestPayment: '', interest: '', commissions: '', cutoffDate: '', dueDate: '', detected: false, monthKey: new Date().toISOString().slice(0, 7) })}>+ Captura manual</button>
               </div>
             </div>
-            {pending && <StatementForm draft={pending} onSave={saveStatement} onCancel={() => setPending(null)} />}
+            {confirmNode}
             {editing && <StatementForm draft={editing} onSave={saveStatement} onCancel={() => setEditing(null)} />}
             {data.cards.length === 0 && (
               <div className="card"><p>Empieza vacía, sin saldos inventados. Sube tu primer estado de cuenta en PDF o foto y la app detecta la tarjeta, el banco, el saldo, el pago mínimo, el pago para no generar intereses, los intereses y las fechas.</p>
@@ -752,6 +735,10 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {tab === 'msi' && <MsiPanel data={data} setData={setData} />}
+        {tab === 'analisis' && <Analytics data={data} setData={setData} />}
+        {tab === 'simuladores' && <Simulators data={data} latestByCard={latestByCard} />}
 
         {tab === 'calendario' && (() => {
           const cal = calendarFor(calMonth)
@@ -1098,7 +1085,7 @@ export default function App() {
           </section>
         )}
       </main>
-      <footer>App TDC v2.4.1 · Tus datos se guardan solo en tu navegador (localStorage). No se suben a ningún servidor. El plan es una simulación educativa, no asesoría financiera.</footer>
+      <footer>App TDC v3.1 · Tus datos se guardan solo en tu navegador (localStorage). No se suben a ningún servidor. El plan es una simulación educativa, no asesoría financiera.</footer>
       </div>
       </div>
     </div>
