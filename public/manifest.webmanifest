@@ -1,0 +1,25 @@
+{
+  "name": "App TDC",
+  "short_name": "App TDC",
+  "description": "Analiza tus tarjetas de cr\u00e9dito y d\u00e9bito y arma tu plan para liquidarlas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "es",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

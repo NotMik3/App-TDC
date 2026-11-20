@@ -126,3 +126,42 @@ export function monthKeyFromDate(iso) {
   if (!iso) return new Date().toISOString().slice(0, 7)
   return iso.slice(0, 7)
 }
+
+// Lectura de estados de cuenta de DÉBITO (TDD): saldo final, lo que entró,
+// lo que salió, comisiones y rendimientos. Nunca inventa valores: lo que no
+// encuentra queda vacío para corregirlo a mano. Sin desglose por categorías
+// automático: los movimientos vienen en texto corrido y no se pueden asignar
+// a categorías con seguridad; el mayor gasto del mes se captura a mano.
+export function parseDebitStatementText(text) {
+  const t = ' ' + text.replace(/\s+/g, ' ') + ' '
+  const out = { bank: null, last4: null, closingBalance: null, totalIncome: null, totalExpenses: null, fees: null, interestEarned: null, cutoffDate: null }
+
+  const banks = ['Citibanamex', 'Banamex', 'BBVA', 'HSBC', 'Santander', 'Banorte', 'Scotiabank', 'Inbursa', 'BanBajío', 'Banco Azteca', 'Nu', 'RappiCard', 'American Express', 'Liverpool', 'Palacio de Hierro']
+  for (const b of banks) {
+    if (new RegExp(b, 'i').test(t)) { out.bank = b === 'Banamex' ? 'Citibanamex' : b; break }
+  }
+  let m = t.match(/(?:cuenta|terminaci[oó]n|terminada en|termina en|CLABE)[^\d]{0,12}(\d{4})/i)
+    || t.match(/\*{4,}\s?(\d{4})/)
+  if (m) out.last4 = m[1]
+
+  out.closingBalance = findMoney(t, [
+    new RegExp(`saldo\\s+final[^$\\d]{0,20}${MONEY}`, 'i'),
+    new RegExp(`saldo\\s+al\\s+corte[^$\\d]{0,20}${MONEY}`, 'i'),
+    new RegExp(`saldo\\s+actual[^$\\d]{0,20}${MONEY}`, 'i'),
+  ])
+  out.totalIncome = findMoney(t, [
+    new RegExp(`total\\s+de\\s+(?:dep[oó]sitos|abonos)[^$\\d]{0,20}${MONEY}`, 'i'),
+    new RegExp(`(?:dep[oó]sitos|abonos)\\s+(?:del\\s+periodo|totales)[^$\\d]{0,20}${MONEY}`, 'i'),
+  ])
+  out.totalExpenses = findMoney(t, [
+    new RegExp(`total\\s+de\\s+(?:retiros|cargos)[^$\\d]{0,20}${MONEY}`, 'i'),
+    new RegExp(`(?:retiros|cargos)\\s+(?:del\\s+periodo|totales)[^$\\d]{0,20}${MONEY}`, 'i'),
+  ])
+  out.fees = findMoney(t, [new RegExp(`comisiones?[^$\\d]{0,20}${MONEY}`, 'i')])
+  out.interestEarned = findMoney(t, [
+    new RegExp(`intereses?\\s+ganados[^$\\d]{0,20}${MONEY}`, 'i'),
+    new RegExp(`rendimientos?[^$\\d]{0,20}${MONEY}`, 'i'),
+  ])
+  out.cutoffDate = findDate(t, [new RegExp(`fecha\\s+de\\s+corte[^\\d]{0,20}${DATE}`, 'i'), new RegExp(`corte[^\\d]{0,20}${DATE}`, 'i')])
+  return out
+}

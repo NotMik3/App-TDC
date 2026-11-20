@@ -65,6 +65,30 @@ export function simulateTogether(cards, monthlyBudget, strategy) {
   return { months, totalInterest, totalPaid, payoffDate: months < 600 ? d.toISOString().slice(0, 7) : null, feasible: months < 600 }
 }
 
+// Pago recomendado de ESTE mes para cada tarjeta cuando el plan es "todas juntas":
+// primero cubre el mínimo de cada una y el resto va a la prioritaria según la estrategia.
+// Devuelve un Map(id -> pago de este mes). Misma regla que la app de Muse (v2).
+export function recommendedJoint(cards, budget, strategy) {
+  const out = new Map()
+  let avail = budget || 0
+  for (const c of cards) {
+    const est = c.minimum > 0 ? c.minimum : Math.max(30, (c.balance || 0) * 0.025)
+    const pay = Math.max(0, Math.min(c.balance || 0, est, avail))
+    out.set(c.id, pay)
+    avail -= pay
+  }
+  if (avail > 0) {
+    const ordered = [...cards].sort((a, b) => strategy === 'snowball' ? (a.balance || 0) - (b.balance || 0) : (b.rate || 0) - (a.rate || 0))
+    for (const c of ordered) {
+      if (avail <= 0) break
+      const room = (c.balance || 0) - (out.get(c.id) || 0)
+      const extra = Math.min(room, avail)
+      if (extra > 0) { out.set(c.id, (out.get(c.id) || 0) + extra); avail -= extra }
+    }
+  }
+  return out
+}
+
 export function simulateMinimumsOnly(cards) {
   let totalInterest = 0
   let months = 0
@@ -90,8 +114,11 @@ export function simulateMinimumsOnly(cards) {
   return { months, totalInterest }
 }
 
+let privacy = false
+export const setPrivacy = (v) => { privacy = !!v }
 export const fmtMoney = (v) => {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—'
+  if (privacy) return '$•••••'
   return '$' + Math.round(v).toLocaleString('es-MX')
 }
 export const fmtMonth = (ym) => {
